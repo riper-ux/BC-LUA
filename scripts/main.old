@@ -1,0 +1,461 @@
+-- sync_cube.lua
+-- Полный рабочий скрипт с синхронизацией
+
+local socket = require("socket")
+local spawnedCube = nil
+local isSyncActive = false
+local isHost = false
+local isClient = false
+local udpSocket = nil
+local remoteAddress = nil
+local remotePort = nil
+local localPort = 12345
+local targetHost = "127.0.0.1"
+local targetPort = 12345
+local syncInterval = 33 -- миллисекунды
+local cubeClass = nil
+local assetsLoaded = false
+local syncRunning = false
+
+-- Данные другого игрока
+local otherPlayerPos = {X = 0, Y = 0, Z = 0}
+local otherPlayerRot = {Pitch = 0, Yaw = 0, Roll = 0}
+
+print("[1] Script started, loading...")
+
+-- Функция получения позиции игрока
+local function GetPlayerPos()
+    local p = FindFirstOf("mainPlayer_C")
+    if not p then 
+        return nil 
+    end
+    return p:K2_GetActorLocation()
+end
+
+-- Функция получения поворота игрока
+local function GetPlayerRot()
+    local p = FindFirstOf("mainPlayer_C")
+    if not p then return nil end
+    return p:K2_GetActorRotation()
+end
+
+-- Загрузка класса куба
+function LoadCubeClass(callback)
+    print("[2] LoadCubeClass called")
+    ExecuteInGameThread(function()
+        print("[3] Inside ExecuteInGameThread")
+        cubeClass = LoadAsset("/Game/Mods/SynsMod/CUBE.CUBE_C")
+        if cubeClass then
+            assetsLoaded = true
+            print("[4] SUCCESS: Cube class loaded!")
+        else
+            print("[4] ERROR: Failed to load cube class")
+        end
+        if callback then 
+            print("[5] Calling callback")
+            callback() 
+        end
+    end)
+end
+
+-- Спавн куба
+-- Спавн куба через GameplayStatics
+function SpawnCubeAtLocation(location)
+    print("[SPAWN] SpawnCubeAtLocation called")
+    if not assetsLoaded then
+        print("[SPAWN] Assets not loaded")
+        return nil
+    end
+    
+    local world = FindFirstOf("World")
+    if not world then
+        print("[SPAWN] No world found")
+        return nil
+    end
+    
+    -- Ищем GameplayStatics
+    local gameplayStatics = FindFirstOf("GameplayStatics")
+    if not gameplayStatics then
+        print("[SPAWN] GameplayStatics not found, trying FindObject...")
+        gameplayStatics = FindObject("/Script/Engine.Default__GameplayStatics")
+    end
+    
+    if not gameplayStatics then
+        print("[SPAWN] ERROR: GameplayStatics not found!")
+        return nil
+    end
+    print("[SPAWN] GameplayStatics found: " .. tostring(gameplayStatics))
+    
+    local transform = {
+        Translation = location,
+        Rotation = {Pitch = 0, Yaw = 0, Roll = 0},
+        Scale3D = {X = 1, Y = 1, Z = 1}
+    }
+    
+    local spawnParams = { SpawnCollisionHandlingOverride = 1 }
+    
+    -- Пытаемся вызвать SpawnActor через GameplayStatics
+    print("[SPAWN] Calling GameplayStatics:SpawnActor...")
+    
+    local success, spawned = pcall(function()
+        return gameplayStatics:SpawnActor(cubeClass, transform, spawnParams)
+    end)
+    
+    if not success then
+        print("[SPAWN] pcall error: " .. tostring(spawned))
+        
+        -- Пробуем другой вариант
+        print("[SPAWN] Trying GameplayStatics:SpawnActor with different params...")
+        local success2, spawned2 = pcall(function()
+            return gameplayStatics:SpawnActor(cubeClass, location, {Pitch = 0, Yaw = 0, Roll = 0}, spawnParams)
+        end)
+        
+        if not success2 then
+            print("[SPAWN] Second attempt failed: " .. tostring(spawned2))
+            return nil
+        end
+        spawned = spawned2
+    end
+    
+    if spawned and spawned:IsValid() then
+        print("[SPAWN] SUCCESS: Cube spawned via GameplayStatics!")
+        return spawned
+    else
+        print("[SPAWN] ERROR: Spawn returned invalid actor")
+        return nil
+    end
+end
+
+-- Инициализация UDP
+function InitUDP(isHostMode, port)
+    print("[UDP] InitUDP called, isHostMode=" .. tostring(isHostMode))
+    udpSocket = socket.udp()
+    udpSocket:settimeout(0)
+    
+    if isHostMode then
+        udpSocket:setoption('reuseaddr', true)
+        local bindResult = udpSocket:setsockname('0.0.0.0', port)
+        print("[UDP] Host bind result: " .. tostring(bindResult))
+        print("[UDP] Host listening on port " .. port)
+    else
+        udpSocket:setpeername(targetHost, targetPort)
+        print("[UDP] Client set to send to " .. targetHost .. ":" .. targetPort)
+    end
+    
+    return true
+end
+
+-- Сериализация данных
+function SerializeData(pos, rot)
+    return pos.X .. "," .. pos.Y .. "," .. pos.Z .. "|" .. rot.Pitch .. "," .. rot.Yaw .. "," .. rot.Roll
+end
+
+-- Десериализация
+function DeserializeData(data)
+    if not data then return nil end
+    local posPart, rotPart = string.match(data, "([^|]+)|([^|]+)")
+    if not posPart or not rotPart then return nil end
+    
+    local x,y,z = string.match(posPart, "([^,]+),([^,]+),([^,]+)")
+    local p,ya,r = string.match(rotPart, "([^,]+),([^,]+),([^,]+)")
+    
+    if not x or not y or not z or not p or not ya or not r then return nil end
+    
+    return {
+        pos = {X = tonumber(x), Y = tonumber(y), Z = tonumber(z)},
+        rot = {Pitch = tonumber(p), Yaw = tonumber(ya), Roll = tonumber(r)}
+    }
+end
+
+-- Отправка данных (клиент)
+function SendData()
+    if not udpSocket or not isClient then 
+        return 
+    end
+    
+    local player = GetPlayerPos()
+    if not player then return end
+    
+    local pos = player
+    local rot = GetPlayerRot()
+    if not rot then return end
+    
+    local data = SerializeData(pos, rot)
+    udpSocket:send(data)
+end
+
+-- Получение данных (хост)
+function ReceiveData()
+    if not udpSocket or not isHost then return end
+    
+    local data, ip, port = udpSocket:receivefrom()
+    if data then
+        print("[RECV] Received from " .. ip .. ":" .. port)
+        
+        if not remoteAddress then
+            remoteAddress = ip
+            remotePort = port
+            udpSocket:setpeername(remoteAddress, remotePort)
+            print("[RECV] Client connected")
+        end
+        
+        -- Пропускаем рукопожатие
+        if data == "HELLO_FROM_CLIENT" then
+            print("[RECV] Handshake received")
+            return
+        end
+        
+        local parsed = DeserializeData(data)
+        if parsed then
+            otherPlayerPos = parsed.pos
+            otherPlayerRot = parsed.rot
+            
+            if not spawnedCube and isSyncActive then
+                spawnedCube = SpawnCubeAtLocation(otherPlayerPos)
+            end
+        end
+    end
+end
+
+-- Отправка данных от хоста
+function SendHostData()
+    if not udpSocket or not isHost or not remoteAddress then return end
+    
+    local pos = GetPlayerPos()
+    if not pos then return end
+    
+    local rot = GetPlayerRot()
+    if not rot then return end
+    
+    local data = SerializeData(pos, rot)
+    udpSocket:send(data)
+end
+
+-- Клиент отправляет рукопожатие
+function SendHandshake()
+    if not udpSocket or not isClient then return end
+    udpSocket:send("HELLO_FROM_CLIENT")
+    print("[CLIENT] Handshake sent")
+end
+
+-- Получение ответа от хоста (клиент)
+function ReceiveHostData()
+    if not udpSocket or not isClient then return end
+    
+    local data = udpSocket:receive()
+    if data and data ~= "HELLO_FROM_CLIENT" then
+        local parsed = DeserializeData(data)
+        if parsed then
+            otherPlayerPos = parsed.pos
+            otherPlayerRot = parsed.rot
+            
+            if not spawnedCube and isSyncActive then
+                spawnedCube = SpawnCubeAtLocation(otherPlayerPos)
+            end
+        end
+    end
+end
+
+-- Обновление позиции куба
+function UpdateCubePosition()
+    if not spawnedCube or not spawnedCube:IsValid() then
+        return
+    end
+    spawnedCube:K2_SetActorLocation(otherPlayerPos, false, nil, false)
+end
+
+-- Цикл синхронизации
+function SyncLoop()
+    if not isSyncActive then 
+        return 
+    end
+    
+    if isHost then
+        ReceiveData()
+        if remoteAddress then
+            SendHostData()
+        end
+    elseif isClient then
+        SendData()
+        ReceiveHostData()
+    end
+    
+    if spawnedCube and spawnedCube:IsValid() then
+        UpdateCubePosition()
+    end
+end
+
+-- Запуск цикла синхронизации
+function StartSyncLoop()
+    if syncRunning then 
+        return 
+    end
+    syncRunning = true
+    print("[LOOP] Starting sync loop")
+    
+    ExecuteAsync(function()
+        while true do
+            if isSyncActive then
+                SyncLoop()
+            end
+            ExecuteWithDelay(syncInterval, function() end)
+        end
+    end)
+end
+
+-- Запуск хоста
+function StartHost()
+    print("[HOST] Starting as HOST...")
+    if isSyncActive then
+        StopSync()
+    end
+    
+    if InitUDP(true, localPort) then
+        isHost = true
+        isClient = false
+        isSyncActive = true
+        StartSyncLoop()
+        print("[HOST] === HOST MODE ACTIVE ===")
+    end
+end
+
+-- Запуск клиента
+function StartClient()
+    print("[CLIENT] Starting as CLIENT...")
+    if isSyncActive then
+        StopSync()
+    end
+    
+    if InitUDP(false, nil) then
+        isClient = true
+        isHost = false
+        isSyncActive = true
+        StartSyncLoop()
+        print("[CLIENT] === CLIENT MODE ACTIVE ===")
+        ExecuteWithDelay(100, function()
+            SendHandshake()
+        end)
+    end
+end
+
+-- Остановка
+function StopSync()
+    print("[STOP] Stopping synchronization")
+    isSyncActive = false
+    
+    if spawnedCube then
+        spawnedCube:K2_DestroyActor()
+        spawnedCube = nil
+    end
+    
+    if udpSocket then
+        udpSocket:close()
+        udpSocket = nil
+    end
+    
+    isHost = false
+    isClient = false
+    remoteAddress = nil
+    remotePort = nil
+    syncRunning = false
+    
+    print("[STOP] Stopped")
+end
+
+-- Инициализация и старт
+function InitAndStart(mode)
+    if isSyncActive then
+        print("[INIT] Sync already active, ignoring")
+        return
+    end
+    
+    print("[INIT] InitAndStart called with mode=" .. mode)
+    
+    if not assetsLoaded then
+        print("[INIT] Loading assets first...")
+        LoadCubeClass(function()
+            print("[INIT] Assets ready, starting " .. mode)
+            if mode == "host" then
+                StartHost()
+            elseif mode == "client" then
+                StartClient()
+            end
+        end)
+    else
+        print("[INIT] Assets already loaded, starting " .. mode)
+        if mode == "host" then
+            StartHost()
+        elseif mode == "client" then
+            StartClient()
+        end
+    end
+end
+
+-- Регистрация клавиш
+print("[6] Registering key binds...")
+
+RegisterKeyBind(70, function() -- F
+    print("[KEY] F pressed - Starting as HOST")
+    InitAndStart("host")
+end)
+
+RegisterKeyBind(71, function() -- G
+    print("[KEY] G pressed - Starting as CLIENT")
+    InitAndStart("client")
+end)
+
+RegisterKeyBind(72, function() -- H
+    print("[KEY] H pressed - Test spawn at zero coordinates")
+    
+    if not assetsLoaded then
+        print("[KEY] Assets not loaded yet, loading...")
+        LoadCubeClass(function()
+            print("[KEY] Assets loaded, spawning test cube at (0,0,0)")
+            local testLocation = {X = 0, Y = 0, Z = 0}
+            local spawned = SpawnCubeAtLocation(testLocation)
+            if spawned then
+                print("[KEY] Test cube spawned successfully!")
+            else
+                print("[KEY] Test cube spawn failed!")
+            end
+        end)
+        return
+    end
+    
+    local testLocation = {X = 0, Y = 0, Z = 0}
+    print("[KEY] Spawning test cube at X=0 Y=0 Z=0")
+    local spawned = SpawnCubeAtLocation(testLocation)
+    if spawned then
+        print("[KEY] Test cube spawned successfully!")
+    else
+        print("[KEY] Test cube spawn failed!")
+    end
+end)
+
+-- Консольные команды
+RegisterConsoleCommandHandler("synchost", function(cmd, parts, ar)
+    print("[CMD] synchost - Starting as HOST")
+    InitAndStart("host")
+    return true
+end)
+
+RegisterConsoleCommandHandler("syncclient", function(cmd, parts, ar)
+    print("[CMD] syncclient - Starting as CLIENT")
+    InitAndStart("client")
+    return true
+end)
+
+RegisterConsoleCommandHandler("syncstop", function(cmd, parts, ar)
+    print("[CMD] syncstop - Stopping")
+    StopSync()
+    return true
+end)
+
+print("[7] ========================================")
+print("[7] Cube Synchronization Script Loaded!")
+print("[7] ========================================")
+print("[7] F - Start as HOST")
+print("[7] G - Start as CLIENT")
+print("[7] H - Stop sync")
+print("[7] synchost / syncclient / syncstop - console commands")
+print("[7] ========================================")

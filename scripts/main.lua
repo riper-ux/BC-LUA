@@ -1,196 +1,273 @@
--- spawn_and_move_cube.lua
--- Упрощенная версия с использованием готового Blueprint куба
+-- main.lua
+print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
+print("========================================")
+print("=== SYNC CUBE SPAWNER ===")
+print("========================================\n")
+
+local config = require("config")
+local udp = require("udp")
+local player = require("player")
+local spawner = require("spawner")
+local serializer = require("serializer")
 
 local spawnedCube = nil
-local isCubeSpawned = false
-local spawnDistance = 500.0
-local cubeClass = nil
-local assetsLoaded = false
+local isSyncActive = false
+local isHost = false
+local isClient = false
+local syncRunning = false
 
--- Функция для получения позиции игрока
-local function GetPlayerPos()
-    local p = FindFirstOf("mainPlayer_C")
-    if not p then return nil end
-    return p:K2_GetActorLocation()
+-- Данные другого игрока
+local otherPlayerPos = {X = 0, Y = 0, Z = 0}
+local otherPlayerRot = {Pitch = 0, Yaw = 0, Roll = 0}
+
+-- Инициализация
+local function Init()
+    print("[INIT] Finding ModActor...\n")
+    if spawner.findModActor() then
+        print("[INIT] Loading cube class...\n")
+        spawner.loadCube(config.cubePath)
+    end
 end
 
--- Функция для получения поворота игрока
-local function GetPlayerRot()
-    local p = FindFirstOf("mainPlayer_C")
-    if not p then return nil end
-    return p:K2_GetActorRotation()
-end
-
--- Функция для получения forward вектора из Rotator
-function GetForwardVector(rot)
-    local pitch = rot.Pitch * math.pi / 180
-    local yaw = rot.Yaw * math.pi / 180
-    
-    local x = math.cos(yaw) * math.cos(pitch)
-    local y = math.sin(yaw) * math.cos(pitch)
-    local z = math.sin(pitch)
-    
-    return {X = x, Y = y, Z = z}
-end
-
--- Функция для получения позиции перед игроком
-function GetPositionInFrontOfPlayer(distance)
-    local playerPos = GetPlayerPos()
-    local playerRot = GetPlayerRot()
-    
-    if not playerPos or not playerRot then
-        return nil
+-- Отправка данных (клиент)
+local function SendData()
+    local pos = player.getPos()
+    local rot = player.getRot()
+    if not pos or not rot then 
+        return 
     end
     
-    local forwardVector = GetForwardVector(playerRot)
-    
-    local targetLocation = {
-        X = playerPos.X + (forwardVector.X * distance),
-        Y = playerPos.Y + (forwardVector.Y * distance),
-        Z = playerPos.Z + (forwardVector.Z * distance)
-    }
-    
-    return targetLocation
+    local data = serializer.serialize(pos, rot)
+    udp.send(data)
 end
 
--- Загрузка класса куба
-function LoadCubeClass(callback)
-    ExecuteInGameThread(function()
-        print("Loading cube class...")
-        cubeClass = LoadAsset("/Game/Mods/SynsMod/CUBE.CUBE_C")
+-- Получение данных (хост)
+local function ReceiveData()
+    local data, ip, port = udp.receive()
+    if data then
+        print("[RECV] From " .. ip .. ":" .. port .. "\n")
         
-        if cubeClass then
-            assetsLoaded = true
-            print("Cube class loaded successfully!")
-        else
-            print("Failed to load cube class at: /Game/Mods/SynsMod/CUBE.CUBE_C")
-        end
-        
-        if callback then
-            callback()
-        end
-    end)
-end
-
--- Функция для спавна куба
-function SpawnCubeAtLocation(location)
-    if not assetsLoaded or not cubeClass then
-        print("Cube class not loaded yet")
-        return nil
-    end
-    
-    local world = FindFirstOf("World")
-    if not world then
-        print("No World found")
-        return nil
-    end
-    
-    local spawnParams = {
-        SpawnCollisionHandlingOverride = 1 -- AlwaysSpawn
-    }
-    
-    -- Спавним куб из вашего Blueprint
-    local spawned = world:SpawnActor(cubeClass, location, {Pitch=0, Yaw=0, Roll=0}, spawnParams)
-    
-    if spawned and spawned:IsValid() then
-        print("Cube spawned successfully!")
-        return spawned
-    else
-        print("Failed to spawn cube")
-        return nil
-    end
-end
-
--- Функция для обновления позиции куба
-function UpdateCubePosition()
-    if not spawnedCube or not spawnedCube:IsValid() then
-        return
-    end
-    
-    local newLocation = GetPositionInFrontOfPlayer(spawnDistance)
-    if newLocation then
-        spawnedCube:K2_SetActorLocation(newLocation, false, nil, false)
-    end
-end
-
--- Переключение спавна куба
-function ToggleCube()
-    local currentPlayer = FindFirstOf("mainPlayer_C")
-    if not currentPlayer or not currentPlayer:IsValid() then
-        print("Player not found! Make sure you're in game.")
-        return
-    end
-    
-    if not isCubeSpawned then
-        if not assetsLoaded then
-            print("Loading cube class first time... Please wait and press F again")
-            LoadCubeClass(function()
-                print("Cube class ready! Press F again to spawn")
-            end)
+        if data == "HELLO_FROM_CLIENT" then
+            print("[RECV] Handshake\n")
+            udp.setPeer(ip, port)
             return
         end
         
-        print("Spawning cube...")
-        local spawnLocation = GetPositionInFrontOfPlayer(spawnDistance)
-        if spawnLocation then
-            spawnedCube = SpawnCubeAtLocation(spawnLocation)
-            if spawnedCube and spawnedCube:IsValid() then
-                isCubeSpawned = true
-                print("=== Cube Activated - Following player ===")
+        local parsed = serializer.deserialize(data)
+        if parsed then
+            otherPlayerPos = parsed.pos
+            otherPlayerRot = parsed.rot
+            print("[RECV] Got position: X=" .. otherPlayerPos.X .. " Y=" .. otherPlayerPos.Y .. " Z=" .. otherPlayerPos.Z .. "\n")
+            print("[RECV] spawnedCube=" .. tostring(spawnedCube) .. " isSyncActive=" .. tostring(isSyncActive) .. " ready=" .. tostring(spawner.isReady()) .. "\n")
+            
+            if not spawnedCube and isSyncActive and spawner.isReady() then
+                print("[RECV] Attempting to spawn...\n")
+                spawnedCube = spawner.spawn(otherPlayerPos, otherPlayerRot, {X = 1, Y = 1, Z = 1})
+                if spawnedCube then
+                    print("[RECV] Spawn success!\n")
+                else
+                    print("[RECV] Spawn failed!\n")
+                end
             end
-        else
-            print("Failed to get spawn location")
         end
-    else
-        print("Destroying cube...")
-        if spawnedCube and spawnedCube:IsValid() then
-            spawnedCube:K2_DestroyActor()
-        end
-        spawnedCube = nil
-        isCubeSpawned = false
-        print("=== Cube Deactivated ===")
     end
 end
 
--- Асинхронный цикл обновления
-local updateRunning = false
-
-function StartUpdateLoop()
-    if updateRunning then
-        return
+-- Отправка от хоста
+local function SendHostData()
+    local pos = player.getPos()
+    local rot = player.getRot()
+    if not pos or not rot then 
+        return 
     end
-    updateRunning = true
+    
+    local data = serializer.serialize(pos, rot)
+    udp.send(data)
+end
+
+-- Получение клиентом
+local function ReceiveClientData()
+    local data = udp.receiveClient()
+    if data and data ~= "HELLO_FROM_CLIENT" then
+        local parsed = serializer.deserialize(data)
+        if parsed then
+            otherPlayerPos = parsed.pos
+            otherPlayerRot = parsed.rot
+            print("[CLIENT] Got position: X=" .. otherPlayerPos.X .. " Y=" .. otherPlayerPos.Y .. " Z=" .. otherPlayerPos.Z .. "\n")
+            
+            if not spawnedCube and isSyncActive and spawner.isReady() then
+                print("[CLIENT] Attempting to spawn...\n")
+                spawnedCube = spawner.spawn(otherPlayerPos, otherPlayerRot, {X = 1, Y = 1, Z = 1})
+                if spawnedCube then
+                    print("[CLIENT] Spawn success!\n")
+                else
+                    print("[CLIENT] Spawn failed!\n")
+                end
+            end
+        end
+    end
+end
+
+-- Обновление позиции куба
+local function UpdateCubePosition()
+    if spawnedCube and spawnedCube:IsValid() then
+        print("[MOVE] Moving cube to: X=" .. otherPlayerPos.X .. " Y=" .. otherPlayerPos.Y .. " Z=" .. otherPlayerPos.Z .. "\n")
+        local success = spawner.move(spawnedCube, otherPlayerPos)
+        if success then
+            print("[MOVE] Move success\n")
+        else
+            print("[MOVE] Move failed\n")
+        end
+    else
+        print("[MOVE] No valid cube to move\n")
+    end
+end
+
+-- Цикл синхронизации
+local function SyncLoop()
+    if not isSyncActive then return end
+    
+    if isHost then
+        ReceiveData()
+        if udp.getPeer then
+            SendHostData()
+        end
+    elseif isClient then
+        SendData()
+        ReceiveClientData()
+    end
+    
+    UpdateCubePosition()
+end
+
+-- Запуск цикла
+local function StartSyncLoop()
+    if syncRunning then return end
+    syncRunning = true
+    print("[LOOP] Starting sync loop\n")
     
     ExecuteAsync(function()
         while true do
-            if isCubeSpawned and spawnedCube and spawnedCube:IsValid() then
-                UpdateCubePosition()
+            if isSyncActive then
+                SyncLoop()
             end
-            ExecuteWithDelay(16, function() end)
+            ExecuteWithDelay(config.syncInterval, function() end)
         end
     end)
 end
 
--- Регистрируем консольную команду
-RegisterConsoleCommandHandler("spawncube", function(cmd, parts, ar)
-    ToggleCube()
-    return true
-end)
+-- Запуск хоста
+local function StartHost()
+    print("[HOST] Starting...\n")
+    if isSyncActive then StopSync() end
+    
+    if not spawner.isReady() then Init() end
+    
+    if udp.initHost(config.localPort) then
+        isHost = true
+        isClient = false
+        isSyncActive = true
+        StartSyncLoop()
+        print("[HOST] === ACTIVE ===\n")
+    end
+end
 
--- Регистрируем клавишу F
+-- Запуск клиента
+local function StartClient()
+    print("[CLIENT] Starting...\n")
+    if isSyncActive then StopSync() end
+    
+    if not spawner.isReady() then Init() end
+    
+    if udp.initClient(config.targetHost, config.targetPort) then
+        isClient = true
+        isHost = false
+        isSyncActive = true
+        StartSyncLoop()
+        print("[CLIENT] === ACTIVE ===\n")
+        ExecuteWithDelay(100, function()
+            udp.send("HELLO_FROM_CLIENT")
+            print("[CLIENT] Handshake sent\n")
+        end)
+    end
+end
+
+-- Остановка
+local function StopSync()
+    print("[STOP] Stopping...\n")
+    isSyncActive = false
+    
+    if spawnedCube then
+        spawnedCube = spawner.destroy(spawnedCube)
+    end
+    
+    udp.close()
+    isHost = false
+    isClient = false
+    syncRunning = false
+end
+
+-- Регистрация клавиш
 RegisterKeyBind(70, function()
-    ToggleCube()
+    if isSyncActive then
+        print("[KEY] Sync active, ignoring\n")
+        return
+    end
+    print("\n[KEY] F - HOST\n")
+    StartHost()
 end)
 
--- Запускаем цикл обновления
-StartUpdateLoop()
+RegisterKeyBind(71, function()
+    if isSyncActive then
+        print("[KEY] Sync active, ignoring\n")
+        return
+    end
+    print("\n[KEY] G - CLIENT\n")
+    StartClient()
+end)
+
+RegisterKeyBind(72, function() -- H
+    print("\n================================================================================\n")
+    print("[KEY] H pressed - Spawning cube at player position\n")
+    
+    local pos = player.getPos()
+    local rot = player.getRot()
+    
+    if not pos then
+        print("[ERROR] Failed to get player position - pos is nil\n")
+        return
+    end
+    if not rot then
+        print("[ERROR] Failed to get player rotation - rot is nil\n")
+        return
+    end
+    
+    print("[DEBUG] Player position: X=" .. pos.X .. " Y=" .. pos.Y .. " Z=" .. pos.Z .. "\n")
+    print("[DEBUG] Player rotation: Pitch=" .. rot.Pitch .. " Yaw=" .. rot.Yaw .. " Roll=" .. rot.Roll .. "\n")
+    
+    local spawnPos = {X = pos.X, Y = pos.Y, Z = pos.Z + 100}
+    print("[DEBUG] Spawn position: X=" .. spawnPos.X .. " Y=" .. spawnPos.Y .. " Z=" .. spawnPos.Z .. "\n")
+    
+    if not spawner.isReady() then
+        print("[ERROR] Spawner not ready! Press F first to initialize.\n")
+        return
+    end
+    
+    local cube = spawner.spawn(spawnPos, rot, {X = 1, Y = 1, Z = 1})
+    
+    if cube then
+        print("[SUCCESS] Cube spawned successfully!\n")
+        local cubePos = cube:K2_GetActorLocation()
+        if cubePos then
+            print("[DEBUG] Cube position: X=" .. cubePos.X .. " Y=" .. cubePos.Y .. " Z=" .. cubePos.Z .. "\n")
+        end
+    else
+        print("[ERROR] Cube spawn failed!\n")
+    end
+end)
 
 print("========================================")
-print("Cube Spawner Loaded for VotV!")
-print("========================================")
-print("Using: /Game/Mods/SynsMod/CUBE.CUBE_C")
-print("Press F to spawn cube")
-print("(First press loads the cube class)")
-print("Cube follows player movement")
-print("Press F again to destroy")
-print("========================================")
+print("F - Start as HOST")
+print("G - Start as CLIENT")
+print("H - Spawn test cube")
+print("========================================\n")
