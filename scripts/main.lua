@@ -15,10 +15,18 @@ local isSyncActive = false
 local isHost = false
 local isClient = false
 local syncRunning = false
+local ticker = 0
+local Tticker = 0
+local clock = os.clock()
+local Tclock = os.clock()
 
 -- Данные другого игрока
 local otherPlayerPos = {X = 0, Y = 0, Z = 0}
 local otherPlayerRot = {Pitch = 0, Yaw = 0, Roll = 0}
+local SendPlayerPos = {X = 0, Y = 0, Z = 0}
+local SendPlayerRot = {Pitch = 0, Yaw = 0, Roll = 0}
+local ActivePlayerPos = {X = 0, Y = 0, Z = 0}
+local ActivePlayerRot = {Pitch = 0, Yaw = 0, Roll = 0}
 
 -- Инициализация
 local function Init()
@@ -36,15 +44,18 @@ local function SendData()
     if not pos or not rot then 
         return 
     end
-    local data = serializer.serialize(pos, rot)
-    udp.send(data)
+    if pos.X ~= SendPlayerPos.X or pos.Y ~= SendPlayerPos.Y or pos.Z ~= SendPlayerPos.Z or rot.Pitch ~= SendPlayerRot.Pitch or rot.Yaw ~= SendPlayerRot.Yaw or rot.Roll ~= SendPlayerRot.Roll then
+        local data = serializer.serialize(pos, rot)
+        udp.send(data)
+        SendPlayerPos = pos
+        SendPlayerRot = rot
+    end
 end
 
 -- Получение данных (хост)
 local function ReceiveData()
     local data, ip, port = udp.receive()
     if data then
-        print("[RECV] From " .. ip .. ":" .. port .. "\n")
         
         if data == "HELLO_FROM_CLIENT" then
             print("[RECV] Handshake\n")
@@ -55,10 +66,7 @@ local function ReceiveData()
         local parsed = serializer.deserialize(data)
         if parsed then
             otherPlayerPos = parsed.pos
-            otherPlayerRot = parsed.rot
-            print("[RECV] Got position: X=" .. otherPlayerPos.X .. " Y=" .. otherPlayerPos.Y .. " Z=" .. otherPlayerPos.Z .. "\n")
-            print("[RECV] spawnedCube=" .. tostring(spawnedCube) .. " isSyncActive=" .. tostring(isSyncActive) .. " ready=" .. tostring(spawner.isReady()) .. "\n")
-            
+            otherPlayerRot = parsed.rot   
             if not spawnedCube and isSyncActive and spawner.isReady() then
                 print("[RECV] Attempting to spawn...\n")
                 spawnedCube = spawner.spawn(otherPlayerPos, otherPlayerRot, {X = 1, Y = 1, Z = 1})
@@ -92,8 +100,6 @@ local function ReceiveClientData()
         if parsed then
             otherPlayerPos = parsed.pos
             otherPlayerRot = parsed.rot
-            print("[CLIENT] Got position: X=" .. otherPlayerPos.X .. " Y=" .. otherPlayerPos.Y .. " Z=" .. otherPlayerPos.Z .. "\n")
-            
             if not spawnedCube and isSyncActive and spawner.isReady() then
                 print("[CLIENT] Attempting to spawn...\n")
                 spawnedCube = spawner.spawn(otherPlayerPos, otherPlayerRot, {X = 1, Y = 1, Z = 1})
@@ -109,16 +115,14 @@ end
 
 -- Обновление позиции куба
 local function UpdateCubePosition()
-    if spawnedCube and spawnedCube:IsValid() then
-        print("[MOVE] Moving cube to: X=" .. otherPlayerPos.X .. " Y=" .. otherPlayerPos.Y .. " Z=" .. otherPlayerPos.Z .. "\n")
+    if spawnedCube and spawnedCube:IsValid() and (otherPlayerPos.X ~= ActivePlayerPos.X or otherPlayerPos.Y ~= ActivePlayerPos.Y or otherPlayerPos.Z ~= ActivePlayerPos.Z or otherPlayerRot.Pitch ~= ActivePlayerRot.Pitch or otherPlayerRot.Yaw ~= ActivePlayerRot.Yaw or otherPlayerRot.Roll ~= ActivePlayerRot.Roll) then
         local success = spawner.move(spawnedCube, otherPlayerPos, otherPlayerRot)
         if success then
-            print("[MOVE] Move success\n")
+            ActivePlayerPos = otherPlayerPos
+            ActivePlayerRot = otherPlayerRot
         else
             print("[MOVE] Move failed\n")
         end
-    else
-        print("[MOVE] No valid cube to move\n")
     end
 end
 
@@ -126,17 +130,29 @@ end
 local function SyncLoop()
     if not isSyncActive then return end
     
-    if isHost then
-        ReceiveData()
-        if udp.getPeer then
-            SendHostData()
-        end
-    elseif isClient then
-        SendData()
-        ReceiveClientData()
+    if os.clock() - clock >= 1 then
+        clock = os.clock()
+        print("[LOOP] TICKER: " .. ticker .. "\n")
+        print("[LOOP] TPS: " .. Tticker .. "\n")
+        ticker = 0
+        Tticker = 0
     end
+    if os.clock() - Tclock >= (1/config.TPS) then
+        Tclock = os.clock()
+        if isHost then
+            ReceiveData()
+            if udp.getPeer then
+                SendHostData()
+            end
+        elseif isClient then
+            SendData()
+            ReceiveClientData()
+        end
     
-    UpdateCubePosition()
+        UpdateCubePosition()
+        Tticker = Tticker + 1
+    end
+    ticker = ticker + 1
 end
 
 -- Запуск цикла
@@ -150,7 +166,7 @@ local function StartSyncLoop()
             if isSyncActive then
                 SyncLoop()
             end
-            ExecuteWithDelay(config.syncInterval, function() end)
+            ExecuteWithDelay(1, function() end)
         end
     end)
 end
@@ -161,6 +177,8 @@ local function StartHost()
     if isSyncActive then StopSync() end
     
     if not spawner.isReady() then Init() end
+
+    player.cache()
     
     if udp.initHost(config.localPort) then
         isHost = true
@@ -177,6 +195,8 @@ local function StartClient()
     if isSyncActive then StopSync() end
     
     if not spawner.isReady() then Init() end
+
+    player.cache()
     
     if udp.initClient(config.targetHost, config.targetPort) then
         isClient = true

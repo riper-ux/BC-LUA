@@ -1,37 +1,49 @@
 -- player.lua
 local player = {}
+local cachedPlayer = nil
+local cachedPlayerAddress = nil
+
+function player.cache()
+    cachedPlayer = FindFirstOf("mainPlayer_C")
+    if cachedPlayer then
+        cachedPlayerAddress = cachedPlayer:GetAddress()
+        print("[PLAYER] Cached at address: " .. tostring(cachedPlayerAddress))
+        return true
+    end
+    return false
+end
 
 function player.getPos()
-    local p = FindFirstOf("mainPlayer_C")
-    if not p then 
-        return nil 
+    if not cachedPlayer then
+        if not player.cache() then return nil end
     end
     
-    local ok, pos = pcall(function() return p:K2_GetActorLocation() end)
-    if not ok or not pos then
-        return nil
+    -- Быстрая проверка валидности без поиска
+    local ok, isValid = pcall(function() return cachedPlayer:IsValid() end)
+    if not ok or not isValid then
+        player.cache() -- перезагружаем
+        if not cachedPlayer then return nil end
     end
-    return pos
+    
+    return cachedPlayer:K2_GetActorLocation()
 end
 
 function player.getRot()
-    local p = FindFirstOf("mainPlayer_C")
-    if not p then 
-        return nil 
+    if not cachedPlayer then
+        if not player.cache() then return nil end
     end
     
-    local ok, rot = pcall(function() return p:K2_GetActorRotation() end)
-    if not ok or not rot then
-        return nil
+    local ok, isValid = pcall(function() return cachedPlayer:IsValid() end)
+    if not ok or not isValid then
+        player.cache()
+        if not cachedPlayer then return nil end
     end
-    return rot
+    
+    return cachedPlayer:K2_GetActorRotation()
 end
 
 function player.isValid()
-    local p = FindFirstOf("mainPlayer_C")
-    if not p then return false end
-    
-    local ok, valid = pcall(function() return p:IsValid() end)
+    local ok, valid = pcall(function() return cachedPlayer:IsValid() end)
     return ok and valid
 end
 

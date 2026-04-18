@@ -139,12 +139,8 @@ function spawner.move(actor, location, rotation, scale)
     end
 
     local rot = rotation or {Pitch = 0, Yaw = 0, Roll = 0}
-    print("[MOVE] rotation Pitch=" .. tostring(rot.Pitch) .. " Yaw=" .. tostring(rot.Yaw) .. " Roll=" .. tostring(rot.Roll))
     
     local sc = scale or {X = 1, Y = 1, Z = 1}
-    print("[MOVE] scale X=" .. sc.X .. " Y=" .. sc.Y .. " Z=" .. sc.Z)
-    
-    print("[MOVE] Moving to X=" .. location.X .. " Y=" .. location.Y .. " Z=" .. location.Z)
     
     local ok, err = pcall(function()
         modActor:SetActorTransform(actor, location, rot, sc, nil, nil)
@@ -155,7 +151,6 @@ function spawner.move(actor, location, rotation, scale)
         return false
     end
     
-    print("[MOVE] Success")
     return true
 end
 
