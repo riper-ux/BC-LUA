@@ -36,7 +36,6 @@ local function SendData()
     if not pos or not rot then 
         return 
     end
-    
     local data = serializer.serialize(pos, rot)
     udp.send(data)
 end
@@ -112,7 +111,7 @@ end
 local function UpdateCubePosition()
     if spawnedCube and spawnedCube:IsValid() then
         print("[MOVE] Moving cube to: X=" .. otherPlayerPos.X .. " Y=" .. otherPlayerPos.Y .. " Z=" .. otherPlayerPos.Z .. "\n")
-        local success = spawner.move(spawnedCube, otherPlayerPos)
+        local success = spawner.move(spawnedCube, otherPlayerPos, otherPlayerRot)
         if success then
             print("[MOVE] Move success\n")
         else
