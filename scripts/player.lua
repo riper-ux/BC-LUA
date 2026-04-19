@@ -1,5 +1,6 @@
 -- player.lua
 local spawner = require("spawner")
+local udp = require("udp")
 local player = {}
 local cachedPlayer = nil
 local cachedPlayerAddress = nil
@@ -64,6 +65,14 @@ function player.handle (pos, rot, scl)
             print("[PLAYER] Move failed!\n")
         end
     end
+end
+
+function player.send ()
+    local pos = player.getPos()
+    local rot = player.getRot()
+    if not pos or not rot then return end
+    local data = serializer.serialize(pos, rot)
+    udp.add(data)
 end
 
 return player

@@ -8,7 +8,7 @@ RegisterHook("/Game/objects/door.door_C:doorOpen", function(context, ...)
     
     if door and door:IsValid() then
         print("Door opened: " .. door:GetFullName())
-        table.insert(udp.queue, "OPND: " .. door:GetFullName())
+        udp.add("OPND: " .. door:GetFullName())
     end
 end)
 
@@ -17,7 +17,7 @@ RegisterHook("/Game/objects/door.door_C:doorClose", function(context, ...)
     
     if door and door:IsValid() then
         print("Door closed: " .. door:GetFullName())
-        table.insert(udp.queue, "CLSD: " .. door:GetFullName())
+        udp.add("CLSD: " .. door:GetFullName())
     end
 end)
 
@@ -26,7 +26,7 @@ end
 
 function door.sync()
     if not DoorReady then
-        print("Door not ready! Readying...")
+        print("[DOOR] Not ready! Readying...")
         door.init()
     end
 end

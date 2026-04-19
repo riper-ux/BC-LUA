@@ -1,5 +1,5 @@
 -- udp.lua
-local socket = require("lib.luasocket.socket")
+local socket = require("socket")
 local json = require("lib.json.json")
 
 local udp = {}
@@ -38,15 +38,9 @@ end
 function udp.receive()
     if udpSocket then
         local data, ip, port = udpSocket:receivefrom()
+        if not data then return nil end
         data = json.decode(data)
         return data, ip, port
-    end
-    return nil
-end
-
-function udp.receiveClient()
-    if udpSocket then
-        return udpSocket:receive()
     end
     return nil
 end

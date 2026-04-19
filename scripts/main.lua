@@ -1,18 +1,15 @@
 -- main.lua
-print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
-print("========================================")
-print("=== SYNC CUBE SPAWNER ===")
-print("========================================\n")
+print("\n")
+print("=== PROTOTYPE V1.0 ===\n")
+print("\n")
 
 local config = require("config")
 local udp = require("udp")
 local player = require("player")
 local spawner = require("spawner")
-local serializer = require("serializer")
 local door = require("door")
 local handler = require("handler")
 
-local spawnedCube = nil
 local isSyncActive = false
 local isHost = false
 local isClient = false
@@ -21,38 +18,6 @@ local ticker = 0
 local Tticker = 0
 local clock = os.clock()
 local Tclock = os.clock()
-
--- Данные другого игрока
-local otherPlayerPos = {X = 0, Y = 0, Z = 0}
-local otherPlayerRot = {Pitch = 0, Yaw = 0, Roll = 0}
-local SendPlayerPos = {X = 0, Y = 0, Z = 0}
-local SendPlayerRot = {Pitch = 0, Yaw = 0, Roll = 0}
-local ActivePlayerPos = {X = 0, Y = 0, Z = 0}
-local ActivePlayerRot = {Pitch = 0, Yaw = 0, Roll = 0}
-
--- Инициализация
-local function Init()
-    print("[INIT] Finding ModActor...\n")
-    if spawner.findModActor() then
-        print("[INIT] Loading cube class...\n")
-        spawner.loadCube(config.cubePath)
-    end
-end
-
--- Отправка данных (клиент)
-local function SendData()
-    local pos = player.getPos()
-    local rot = player.getRot()
-    if not pos or not rot then 
-        return 
-    end
-    if pos.X ~= SendPlayerPos.X or pos.Y ~= SendPlayerPos.Y or pos.Z ~= SendPlayerPos.Z or rot.Pitch ~= SendPlayerRot.Pitch or rot.Yaw ~= SendPlayerRot.Yaw or rot.Roll ~= SendPlayerRot.Roll then
-        local data = serializer.serialize(pos, rot)
-        udp.add(data)
-        SendPlayerPos = pos
-        SendPlayerRot = rot
-    end
-end
 
 -- Цикл синхронизации
 local function SyncLoop()
@@ -70,7 +35,7 @@ local function SyncLoop()
         if isHost then
             handler.handle()
         elseif isClient then
-            SendData()
+            player.send()
         end
         Tticker = Tticker + 1
     end
@@ -88,7 +53,6 @@ local function StartSyncLoop()
             if isSyncActive then
                 SyncLoop()
             end
-            ExecuteWithDelay(1, function() end)
         end
     end)
 end
@@ -97,12 +61,8 @@ end
 local function StartHost()
     print("[HOST] Starting...\n")
     if isSyncActive then StopSync() end
-    
-    if not spawner.isReady() then Init() end
 
     player.cache()
-
-    door.init()
     
     if udp.initHost(config.localPort) then
         isHost = true
@@ -117,10 +77,8 @@ end
 local function StartClient()
     print("[CLIENT] Starting...\n")
     if isSyncActive then StopSync() end
-    
-    if not spawner.isReady() then Init() end
 
-    player.cache()
+    door.init()
     
     if udp.initClient(config.targetHost, config.targetPort) then
         isClient = true
@@ -129,21 +87,6 @@ local function StartClient()
         StartSyncLoop()
         print("[CLIENT] === ACTIVE ===\n")
     end
-end
-
--- Остановка
-local function StopSync()
-    print("[STOP] Stopping...\n")
-    isSyncActive = false
-    
-    if spawnedCube then
-        spawnedCube = spawner.destroy(spawnedCube)
-    end
-    
-    udp.close()
-    isHost = false
-    isClient = false
-    syncRunning = false
 end
 
 -- Регистрация клавиш
