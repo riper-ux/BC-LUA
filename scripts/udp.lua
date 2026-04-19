@@ -1,6 +1,6 @@
 -- udp.lua
-local socket = require("socket")
-local json = require("json")
+local socket = require("lib.luasocket.socket")
+local json = require("lib.json.json")
 
 local udp = {}
 udp.queue = {}
@@ -25,6 +25,10 @@ function udp.initClient(host, port)
     return true
 end
 
+function udp.add(data)
+    table.insert(udp.queue, data)
+end
+
 function udp.send()
     if udpSocket and #udp.queue > 0 then
         udpSocket:send(json.encode(udp.queue))
@@ -33,7 +37,9 @@ end
 
 function udp.receive()
     if udpSocket then
-        return json.decode(udpSocket:receivefrom())
+        local data, ip, port = udpSocket:receivefrom()
+        data = json.decode(data)
+        return data, ip, port
     end
     return nil
 end

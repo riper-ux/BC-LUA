@@ -1,7 +1,9 @@
 -- player.lua
+local spawner = require("spawner")
 local player = {}
 local cachedPlayer = nil
 local cachedPlayerAddress = nil
+local spawned = nil
 
 function player.cache()
     cachedPlayer = FindFirstOf("mainPlayer_C")
@@ -45,6 +47,23 @@ end
 function player.isValid()
     local ok, valid = pcall(function() return cachedPlayer:IsValid() end)
     return ok and valid
+end
+
+function player.handle (pos, rot, scl)
+    if not spawned then
+        print("[PLAYER] Attempting to spawn...\n")
+        spawned = spawner.spawn(pos, rot, scl)
+        if spawned then
+            print("[PLAYER] Spawn success!\n")
+        else
+            print("[PLAYER] Spawn failed!\n")
+        end
+    else
+        local success = spawner.move(spawned, pos, rot, scl)
+        if not success then
+            print("[PLAYER] Move failed!\n")
+        end
+    end
 end
 
 return player

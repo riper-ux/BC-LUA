@@ -10,6 +10,7 @@ local player = require("player")
 local spawner = require("spawner")
 local serializer = require("serializer")
 local door = require("door")
+local handler = require("handler")
 
 local spawnedCube = nil
 local isSyncActive = false
@@ -47,83 +48,9 @@ local function SendData()
     end
     if pos.X ~= SendPlayerPos.X or pos.Y ~= SendPlayerPos.Y or pos.Z ~= SendPlayerPos.Z or rot.Pitch ~= SendPlayerRot.Pitch or rot.Yaw ~= SendPlayerRot.Yaw or rot.Roll ~= SendPlayerRot.Roll then
         local data = serializer.serialize(pos, rot)
-        udp.send(data)
+        udp.add(data)
         SendPlayerPos = pos
         SendPlayerRot = rot
-    end
-end
-
--- Получение данных (хост)
-local function ReceiveData()
-    local data, ip, port = udp.receive()
-    if data then
-        
-        if data == "HELLO_FROM_CLIENT" then
-            print("[RECV] Handshake\n")
-            udp.setPeer(ip, port)
-            return
-        end
-        
-        local parsed = serializer.deserialize(data)
-        if parsed then
-            otherPlayerPos = parsed.pos
-            otherPlayerRot = parsed.rot   
-            if not spawnedCube and isSyncActive and spawner.isReady() then
-                print("[RECV] Attempting to spawn...\n")
-                spawnedCube = spawner.spawn(otherPlayerPos, otherPlayerRot, {X = 1, Y = 1, Z = 1})
-                if spawnedCube then
-                    print("[RECV] Spawn success!\n")
-                else
-                    print("[RECV] Spawn failed!\n")
-                end
-            end
-        end
-    end
-end
-
--- Отправка от хоста
-local function SendHostData()
-    local pos = player.getPos()
-    local rot = player.getRot()
-    if not pos or not rot then 
-        return 
-    end
-    
-    local data = serializer.serialize(pos, rot)
-    udp.send(data)
-end
-
--- Получение клиентом
-local function ReceiveClientData()
-    local data = udp.receiveClient()
-    if data and data ~= "HELLO_FROM_CLIENT" then
-        local parsed = serializer.deserialize(data)
-        if parsed then
-            otherPlayerPos = parsed.pos
-            otherPlayerRot = parsed.rot
-            if not spawnedCube and isSyncActive and spawner.isReady() then
-                print("[CLIENT] Attempting to spawn...\n")
-                spawnedCube = spawner.spawn(otherPlayerPos, otherPlayerRot, {X = 1, Y = 1, Z = 1})
-                if spawnedCube then
-                    print("[CLIENT] Spawn success!\n")
-                else
-                    print("[CLIENT] Spawn failed!\n")
-                end
-            end
-        end
-    end
-end
-
--- Обновление позиции куба
-local function UpdateCubePosition()
-    if spawnedCube and spawnedCube:IsValid() and (otherPlayerPos.X ~= ActivePlayerPos.X or otherPlayerPos.Y ~= ActivePlayerPos.Y or otherPlayerPos.Z ~= ActivePlayerPos.Z or otherPlayerRot.Pitch ~= ActivePlayerRot.Pitch or otherPlayerRot.Yaw ~= ActivePlayerRot.Yaw or otherPlayerRot.Roll ~= ActivePlayerRot.Roll) then
-        local success = spawner.move(spawnedCube, otherPlayerPos, otherPlayerRot)
-        if success then
-            ActivePlayerPos = otherPlayerPos
-            ActivePlayerRot = otherPlayerRot
-        else
-            print("[MOVE] Move failed\n")
-        end
     end
 end
 
@@ -141,16 +68,10 @@ local function SyncLoop()
     if os.clock() - Tclock >= (1/config.TPS) then
         Tclock = os.clock()
         if isHost then
-            ReceiveData()
-            if udp.getPeer then
-                SendHostData()
-            end
+            handler.handle()
         elseif isClient then
             SendData()
-            ReceiveClientData()
         end
-    
-        UpdateCubePosition()
         Tticker = Tticker + 1
     end
     ticker = ticker + 1
@@ -207,10 +128,6 @@ local function StartClient()
         isSyncActive = true
         StartSyncLoop()
         print("[CLIENT] === ACTIVE ===\n")
-        ExecuteWithDelay(100, function()
-            udp.send("HELLO_FROM_CLIENT")
-            print("[CLIENT] Handshake sent\n")
-        end)
     end
 end
 

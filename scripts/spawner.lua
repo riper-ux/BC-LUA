@@ -52,22 +52,6 @@ function spawner.loadCube(path)
     end
 end
 
--- Проверка готовности (без IsValid для cubeClass)
-function spawner.isReady()
-    if not modActor then
-        print("[SPAWNER] Not ready: modActor is nil")
-        return false
-    end
-    
-    if not cubeClass then
-        print("[SPAWNER] Not ready: cubeClass is nil")
-        return false
-    end
-    
-    print("[SPAWNER] Ready!")
-    return true
-end
-
 -- Спавн куба
 function spawner.spawn(location, rotation, scale)
     print("[SPAWNER] ========== SPAWN START ==========")
@@ -85,13 +69,19 @@ function spawner.spawn(location, rotation, scale)
     print("[SPAWNER] scale X=" .. sc.X .. " Y=" .. sc.Y .. " Z=" .. sc.Z)
     
     if not modActor then
-        print("[SPAWNER] ERROR: modActor is nil")
-        return nil
+        print("[SPAWNER] WARNING: modActor is nil")
+        if not spawner.findModActor() then
+            print("[SPAWNER] ERROR: Failed to find ModActor")
+            return nil
+        end
     end
     
     if not cubeClass then
-        print("[SPAWNER] ERROR: cubeClass is nil")
-        return nil
+        print("[SPAWNER] WARNING: cubeClass is nil")
+        if not spawner.loadCube(cubePath) then
+            print("[SPAWNER] ERROR: Failed to load cube class")
+            return nil
+        end
     end
     
     print("[SPAWNER] Calling SpawnActor with separate params...")
