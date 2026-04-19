@@ -9,6 +9,7 @@ local udp = require("udp")
 local player = require("player")
 local spawner = require("spawner")
 local serializer = require("serializer")
+local door = require("door")
 
 local spawnedCube = nil
 local isSyncActive = false
@@ -179,6 +180,8 @@ local function StartHost()
     if not spawner.isReady() then Init() end
 
     player.cache()
+
+    door.init()
     
     if udp.initHost(config.localPort) then
         isHost = true

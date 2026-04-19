@@ -1,7 +1,9 @@
 -- udp.lua
 local socket = require("socket")
+local json = require("json")
 
 local udp = {}
+udp.queue = {}
 local udpSocket = nil
 local remoteAddress = nil
 local remotePort = nil
@@ -23,15 +25,15 @@ function udp.initClient(host, port)
     return true
 end
 
-function udp.send(data)
-    if udpSocket then
-        udpSocket:send(data)
+function udp.send()
+    if udpSocket and #udp.queue > 0 then
+        udpSocket:send(json.encode(udp.queue))
     end
 end
 
 function udp.receive()
     if udpSocket then
-        return udpSocket:receivefrom()
+        return json.decode(udpSocket:receivefrom())
     end
     return nil
 end
