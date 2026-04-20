@@ -6,7 +6,7 @@ local config = {
     TPS = 60,
     EventsToProccess = {"/Game/objects/door.door_C:doorOpen", "/Game/objects/door.door_C:doorClose"},
     Modules = {"player", "event", "handler"},
-    cubePath = "/Game/Mods/SynsMod/CUBE.CUBE_C",
+    cubePath = "/Game/Mods/BC-ToolKit/Player.Player_C",
     modActorClass = "ModActor_C",
     playerClass = "mainPlayer_C",
 }
