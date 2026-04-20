@@ -5,10 +5,6 @@ print("\n")
 
 local config = require("config")
 local udp = require("udp")
-local player = require("player")
-local spawner = require("spawner")
-local door = require("door")
-local handler = require("handler")
 
 local isSyncActive = false
 local isHost = false
@@ -18,11 +14,26 @@ local ticker = 0
 local Tticker = 0
 local clock = os.clock()
 local Tclock = os.clock()
+local functoexecute = {}
+local module = {}
+
+for i = 1, #config.Modules do
+    print("[MODULAR] Preparing... " .. config.Modules[i] .. " " .. i .. "/" .. #config.Modules .. "\n")
+    module[config.Modules[i]] = require(config.Modules[i])
+end
+
+local function Tick()
+    --print("[LOOP] Tick\n")
+    udp.send()
+    --print("[LOOP] Execute\n")
+    for i = 1, #functoexecute do
+        module[functoexecute[i][1]][functoexecute[i][2]](module[functoexecute[i][1]])
+    end
+end
 
 -- Цикл синхронизации
 local function SyncLoop()
     if not isSyncActive then return end
-    
     if os.clock() - clock >= 1 then
         clock = os.clock()
         print("[LOOP] TICKER: " .. ticker .. "\n")
@@ -32,11 +43,7 @@ local function SyncLoop()
     end
     if os.clock() - Tclock >= (1/config.TPS) then
         Tclock = os.clock()
-        if isHost then
-            handler.handle()
-        elseif isClient then
-            player.send()
-        end
+        Tick()
         Tticker = Tticker + 1
     end
     ticker = ticker + 1
@@ -47,6 +54,15 @@ local function StartSyncLoop()
     if syncRunning then return end
     syncRunning = true
     print("[LOOP] Starting sync loop\n")
+    print("[MODULAR] Started!\n")
+    for i = 1, #config.Modules do
+        print("[MODULAR] Initialization... " .. config.Modules[i] .. " " .. i .. "/" .. #config.Modules .. "\n")
+        local func = module[config.Modules[i]].init()
+        if func then
+            print("[MODULAR] Registration... " .. config.Modules[i] .. "\n")
+            table.insert(functoexecute, {config.Modules[i], func})
+        end
+    end
     
     ExecuteAsync(function()
         while true do
@@ -61,8 +77,6 @@ end
 local function StartHost()
     print("[HOST] Starting...\n")
     if isSyncActive then StopSync() end
-
-    player.cache()
     
     if udp.initHost(config.localPort) then
         isHost = true
@@ -77,8 +91,6 @@ end
 local function StartClient()
     print("[CLIENT] Starting...\n")
     if isSyncActive then StopSync() end
-
-    door.init()
     
     if udp.initClient(config.targetHost, config.targetPort) then
         isClient = true
@@ -108,48 +120,7 @@ RegisterKeyBind(71, function()
     StartClient()
 end)
 
-RegisterKeyBind(72, function() -- H
-    print("\n================================================================================\n")
-    print("[KEY] H pressed - Spawning cube at player position\n")
-    
-    local pos = player.getPos()
-    local rot = player.getRot()
-    
-    if not pos then
-        print("[ERROR] Failed to get player position - pos is nil\n")
-        return
-    end
-    if not rot then
-        print("[ERROR] Failed to get player rotation - rot is nil\n")
-        return
-    end
-    
-    print("[DEBUG] Player position: X=" .. pos.X .. " Y=" .. pos.Y .. " Z=" .. pos.Z .. "\n")
-    print("[DEBUG] Player rotation: Pitch=" .. rot.Pitch .. " Yaw=" .. rot.Yaw .. " Roll=" .. rot.Roll .. "\n")
-    
-    local spawnPos = {X = pos.X, Y = pos.Y, Z = pos.Z + 100}
-    print("[DEBUG] Spawn position: X=" .. spawnPos.X .. " Y=" .. spawnPos.Y .. " Z=" .. spawnPos.Z .. "\n")
-    
-    if not spawner.isReady() then
-        print("[ERROR] Spawner not ready! Press F first to initialize.\n")
-        return
-    end
-    
-    local cube = spawner.spawn(spawnPos, rot, {X = 1, Y = 1, Z = 1})
-    
-    if cube then
-        print("[SUCCESS] Cube spawned successfully!\n")
-        local cubePos = cube:K2_GetActorLocation()
-        if cubePos then
-            print("[DEBUG] Cube position: X=" .. cubePos.X .. " Y=" .. cubePos.Y .. " Z=" .. cubePos.Z .. "\n")
-        end
-    else
-        print("[ERROR] Cube spawn failed!\n")
-    end
-end)
-
-print("========================================")
-print("F - Start as HOST")
-print("G - Start as CLIENT")
-print("H - Spawn test cube")
+print("========================================\n")
+print("F - Start as HOST\n")
+print("G - Start as CLIENT\n")
 print("========================================\n")

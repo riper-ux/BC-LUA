@@ -3,10 +3,10 @@ local socket = require("socket")
 local json = require("lib.json.json")
 
 local udp = {}
-udp.queue = {}
 local udpSocket = nil
 local remoteAddress = nil
 local remotePort = nil
+udp.queue = {}
 
 function udp.initHost(port)
     udpSocket = socket.udp()
@@ -20,23 +20,29 @@ end
 function udp.initClient(host, port)
     udpSocket = socket.udp()
     udpSocket:settimeout(0)
-    udpSocket:setpeername(host, port)
+    udp.setPeer(host, port)
     print("[UDP] Client to " .. host .. ":" .. port)
     return true
 end
 
 function udp.add(data)
+    --print("[UDP] Adding data to queue")
     table.insert(udp.queue, data)
 end
 
 function udp.send()
-    if udpSocket and #udp.queue > 0 then
-        udpSocket:send(json.encode(udp.queue))
+    if udpSocket and udp.queue and (#udp.queue > 0) and remoteAddress and remotePort then
+        --print("[UDP] Sending data...")
+        local data = json.encode(udp.queue)
+        --print(data)
+        udpSocket:send(data)
+        --print("[UDP] Data sent")
+        udp.queue = {}
     end
 end
 
 function udp.receive()
-    if udpSocket then
+    if udpSocket and not remoteAddress and not remotePort then
         local data, ip, port = udpSocket:receivefrom()
         if not data then return nil end
         data = json.decode(data)

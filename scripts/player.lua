@@ -7,6 +7,11 @@ local cachedPlayer = nil
 local cachedPlayerAddress = nil
 local spawned = nil
 
+function player.init()
+    player.cache()
+    return "send"
+end
+
 function player.cache()
     cachedPlayer = FindFirstOf("mainPlayer_C")
     if cachedPlayer then
@@ -52,11 +57,11 @@ function player.isValid()
 end
 
 function player.handle(data)
-    local parsed = serializer.deserialize
+    local parsed = serializer.deserialize(data[2])
     if not parsed then
         return nil
     end
-    if not spawned then
+    if not spawned or not spawned:IsValid() then
         print("[PLAYER] Attempting to spawn...\n")
         spawned = spawner.spawn(parsed.pos, parsed.rot)
         if spawned then
@@ -65,7 +70,7 @@ function player.handle(data)
             print("[PLAYER] Spawn failed!\n")
         end
     else
-        local success = spawner.move(spawned, pos, rot, scl)
+        local success = spawner.move(spawned, parsed.pos, parsed.rot, scl)
         if not success then
             print("[PLAYER] Move failed!\n")
         end
@@ -73,11 +78,12 @@ function player.handle(data)
 end
 
 function player.send()
+    --print("[PLAYER] Sending player data...")
     local pos = player.getPos()
     local rot = player.getRot()
     if not pos or not rot then return end
     local data = serializer.serialize(pos, rot)
-    udp.add(data)
+    udp.add({"player", data})
 end
 
 return player

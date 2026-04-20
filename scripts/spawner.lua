@@ -3,6 +3,7 @@ local spawner = {}
 local modActor = nil
 local cubeClass = nil
 local cubePath = nil
+local config = require("config")
 
 -- Поиск ModActor в мире
 function spawner.findModActor()
@@ -78,7 +79,7 @@ function spawner.spawn(location, rotation, scale)
     
     if not cubeClass then
         print("[SPAWNER] WARNING: cubeClass is nil")
-        if not spawner.loadCube(cubePath) then
+        if not spawner.loadCube(config.cubePath) then
             print("[SPAWNER] ERROR: Failed to load cube class")
             return nil
         end
