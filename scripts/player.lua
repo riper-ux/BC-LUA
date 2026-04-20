@@ -1,6 +1,7 @@
 -- player.lua
 local spawner = require("spawner")
 local udp = require("udp")
+local serializer = require("serializer")
 local player = {}
 local cachedPlayer = nil
 local cachedPlayerAddress = nil
@@ -50,10 +51,14 @@ function player.isValid()
     return ok and valid
 end
 
-function player.handle (pos, rot, scl)
+function player.handle(data)
+    local parsed = serializer.deserialize
+    if not parsed then
+        return nil
+    end
     if not spawned then
         print("[PLAYER] Attempting to spawn...\n")
-        spawned = spawner.spawn(pos, rot, scl)
+        spawned = spawner.spawn(parsed.pos, parsed.rot)
         if spawned then
             print("[PLAYER] Spawn success!\n")
         else
@@ -67,7 +72,7 @@ function player.handle (pos, rot, scl)
     end
 end
 
-function player.send ()
+function player.send()
     local pos = player.getPos()
     local rot = player.getRot()
     if not pos or not rot then return end
