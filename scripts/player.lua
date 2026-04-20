@@ -6,6 +6,8 @@ local player = {}
 local cachedPlayer = nil
 local cachedPlayerAddress = nil
 local spawned = nil
+local sendedpos = nil
+local sendedrot = nil
 
 function player.init()
     player.cache()
@@ -81,7 +83,7 @@ function player.send()
     --print("[PLAYER] Sending player data...")
     local pos = player.getPos()
     local rot = player.getRot()
-    if not pos or not rot then return end
+    if not pos or not rot or (pos == sendedpos and rot == sendedrot) then return end
     local data = serializer.serialize(pos, rot)
     udp.add({"player", data})
 end
