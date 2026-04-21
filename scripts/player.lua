@@ -1,6 +1,6 @@
 -- player.lua
 local spawner = require("spawner")
-local udp = require("udp")
+local network = require("network")
 local serializer = require("serializer")
 local player = {}
 local cachedPlayer = nil
@@ -85,7 +85,7 @@ function player.send()
     local rot = player.getRot()
     if not pos or not rot or (pos == sendedpos and rot == sendedrot) then return end
     local data = serializer.serialize(pos, rot)
-    udp.add({"player", data})
+    network.add({"player", data})
     sendedpos = pos
     sendedrot = rot
 end

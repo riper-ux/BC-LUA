@@ -2,8 +2,13 @@
 local spawner = {}
 local modActor = nil
 local cubeClass = nil
-local cubePath = nil
 local config = require("config")
+
+function spawner.init()
+    spawner.findModActor()
+    spawner.loadCube(config.cubePath)
+    return nil
+end
 
 -- Поиск ModActor в мире
 function spawner.findModActor()

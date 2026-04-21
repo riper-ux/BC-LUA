@@ -4,7 +4,6 @@ print("=== PROTOTYPE V1.0 ===\n")
 print("\n")
 
 local config = require("config")
-local udp = require("udp")
 
 local isSyncActive = false
 local isHost = false
@@ -23,9 +22,6 @@ for i = 1, #config.Modules do
 end
 
 local function Tick()
-    --print("[LOOP] Tick\n")
-    udp.send()
-    --print("[LOOP] Execute\n")
     for i = 1, #functoexecute do
         module[functoexecute[i][1]][functoexecute[i][2]](module[functoexecute[i][1]])
     end
@@ -78,7 +74,7 @@ local function StartHost()
     print("[HOST] Starting...\n")
     if isSyncActive then StopSync() end
     
-    if udp.initHost(config.localPort) then
+    if module.network.initHost(config.localPort) then
         isHost = true
         isClient = false
         isSyncActive = true
@@ -92,7 +88,7 @@ local function StartClient()
     print("[CLIENT] Starting...\n")
     if isSyncActive then StopSync() end
     
-    if udp.initClient(config.targetHost, config.targetPort) then
+    if module.network.initClient(config.targetHost, config.targetPort, config.localPort1) then
         isClient = true
         isHost = false
         isSyncActive = true
