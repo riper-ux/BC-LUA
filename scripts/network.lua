@@ -56,6 +56,9 @@ function network.send()
             --print("[NETWORK] Data sent")
         end
         network.queue = {}
+    elseif (#network.queue > 1000) then
+        print("[NETWORK] WARNING: Queue overflow! Resetting queue...\n")
+        network.queue = {}
     end
 end
 

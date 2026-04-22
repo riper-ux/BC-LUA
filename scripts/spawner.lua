@@ -150,14 +150,39 @@ function spawner.move(actor, location, rotation, scale)
     return true
 end
 
+function spawner.getActorTransform(actor)
+    if not modActor then
+        print("[SPAWNER] WARNING: modActor is nil")
+        if not spawner.findModActor() then
+            print("[SPAWNER] ERROR: Failed to find ModActor")
+            return nil
+        end
+    end
+    pcall(function()
+        modActor:GetActorTransform(actor)
+    end)
+    local Location = modActor["Location-GetActorTransform"]
+    local Rotation = modActor["Rotation-GetActorTransform"]
+    local Scale = modActor["Scale-GetActorTransform"]
+    return Location, Rotation, Scale
+end
+
 -- Удаление куба
 function spawner.destroy(actor)
     if not actor then
         return nil
     end
+
+    if not modActor then
+        print("[SPAWNER] WARNING: modActor is nil")
+        if not spawner.findModActor() then
+            print("[SPAWNER] ERROR: Failed to find ModActor")
+            return nil
+        end
+    end
     
     pcall(function()
-        actor:K2_DestroyActor()
+        modActor:DestroyActor()
     end)
     
     print("[SPAWNER] Destroyed")
@@ -166,6 +191,13 @@ end
 
 -- Получить ModActor
 function spawner.getModActor()
+    if not modActor then
+        print("[SPAWNER] WARNING: modActor is nil")
+        if not spawner.findModActor() then
+            print("[SPAWNER] ERROR: Failed to find ModActor")
+            return nil
+        end
+    end
     return modActor
 end
 
