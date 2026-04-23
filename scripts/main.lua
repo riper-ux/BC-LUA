@@ -1,6 +1,6 @@
 -- main.lua
 print("\n")
-print("=== PROTOTYPE V1.0 ===\n")
+print("=== PROTOTYPE? ===\n")
 print("\n")
 
 local config = require("config")
@@ -32,8 +32,12 @@ local function SyncLoop()
     if not isSyncActive then return end
     if os.clock() - clock >= 1 then
         clock = os.clock()
-        print("[LOOP] TICKER: " .. ticker .. "\n")
-        print("[LOOP] TPS: " .. Tticker .. "\n")
+        local color = nil
+        if ticker > 1000000 then color = module.cprint.colors.bright_blue elseif ticker > 100000 then color = module.cprint.colors.bright_green elseif ticker > 10000 then color = module.cprint.colors.yellow elseif ticker > 1000 then color = module.cprint.colors.magenta else color = module.cprint.colors.bright_red end
+        if ticker < config.TPS * 2 then module.cprint.print("!!!OVERLOAD!!!\n", color) end
+        module.cprint.print("[LOOP] TICKER: " .. ticker .. "\n", color)
+        module.cprint.print("[LOOP] TPS: " .. Tticker .. "\n", color)
+        if ticker < config.TPS * 2 then module.cprint.print("!!!OVERLOAD!!!\n", color) end
         ticker = 0
         Tticker = 0
     end
@@ -59,7 +63,8 @@ local function StartSyncLoop()
             table.insert(functoexecute, {config.Modules[i], func})
         end
     end
-    
+    clock = os.clock()
+    Tclock = os.clock()
     ExecuteAsync(function()
         while true do
             if isSyncActive then

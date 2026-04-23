@@ -6,6 +6,7 @@ local network = {}
 local sockets = {}
 local clients = {}
 network.queue = {}
+network.isHost = false
 
 function network.init()
     return "send"
@@ -28,6 +29,7 @@ function network.initHost(port)
     sockets[1]:setoption('reuseaddr', true)
     sockets[1]:setsockname('0.0.0.0', port)
     print("[NETWORK] Socket on port " .. port)
+    network.isHost = true
     return true
 end
 
@@ -38,6 +40,7 @@ function network.initClient(host, port, port1)
     sockets[1]:setsockname('0.0.0.0', port1)
     network.addClient(host, port)
     print("[NETWORK] Socket on port " .. port1)
+    network.isHost = false
     return true
 end
 
@@ -68,7 +71,7 @@ function network.receive()
         if not data then return nil end
         --print("[NETWORK] Received data")
         data = json.decode(data)
-        if ip and port then
+        if ip and port and network.isHost then
             network.addClient(ip, port)
         end
         return data, ip, port

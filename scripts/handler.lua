@@ -17,6 +17,8 @@ function handler.handle()
     if not queue then return end
     for i = 1, #queue do
         --print("[HANDLER] Processing: " .. i .. "/" .. #queue .. "\n")
+        queue[i].ip = ip
+        queue[i].port = port
         module[queue[i][1]].handle(queue[i])
     end
     queue = nil
