@@ -2,6 +2,7 @@
 local spawner = {}
 local modActor = nil
 local cubeClass = nil
+local ready = true
 local config = require("config")
 
 function spawner.init()
@@ -40,7 +41,7 @@ end
 
 -- Загрузка класса куба
 function spawner.loadCube(path)
-    cubePath = path
+    local cubePath = path
     print("[SPAWNER] Loading cube class from: " .. path)
     
     local class = FindObject(nil, nil, path, false)
@@ -137,11 +138,18 @@ function spawner.move(actor, location, rotation, scale)
     local rot = rotation or {Pitch = 0, Yaw = 0, Roll = 0}
     
     local sc = scale or {X = 1, Y = 1, Z = 1}
-    
-    ExecuteInGameThread(function()
-        modActor:SetActorTransform(actor, location, rot, sc, true, true)
-    end)
-    
+    print("[MOVE] scale X=" .. sc.X .. " Y=" .. sc.Y .. " Z=" .. sc.Z)
+
+    if ready then
+        ready = false
+        ExecuteInGameThread(function()
+            modActor:SetActorTransform(actor, location, rot, sc, true, true)
+            ready = true
+        end)
+    else
+        print("[MOVE] WARNING: move throttled\n")
+    end
+
     return true
 end
 

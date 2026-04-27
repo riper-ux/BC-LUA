@@ -123,11 +123,6 @@ RegisterKeyBind(71, function()
     StartClient()
 end)
 
-RegisterKeyBind(75, function()
-    local test = require("tests")
-    test.test()
-end)
-
 print("========================================\n")
 print("F - Start as HOST\n")
 print("G - Start as CLIENT\n")
