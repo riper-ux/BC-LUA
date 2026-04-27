@@ -1,6 +1,5 @@
 local network = require("network")
 local spawner = require("spawner")
-local config = require("config")
 local player = require("player")
 
 local prop = {}

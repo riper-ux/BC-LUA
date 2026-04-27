@@ -3,45 +3,76 @@ local socket = require("socket")
 local json = require("lib.json.json")
 
 local network = {}
-local sockets = {}
+local asocket = nil
 local clients = {}
 network.queue = {}
 network.isHost = false
+
+local function concatMultiple(...)
+    local result = {}
+    local offset = 0
+    
+    for _, arr in ipairs({...}) do
+        if arr and #arr > 0 then
+            table.move(arr, 1, #arr, offset + 1, result)
+            offset = offset + #arr
+        end
+    end
+    
+    return result
+end
 
 function network.init()
     return "send"
 end
 
-function network.addClient(ip, port)
-    for i=1, #clients do
-        if clients[i].ip == ip and clients[i].port == port then
-            return false
-        end
-    end
-    print("[NETWORK] Adding client " .. ip .. ":" .. port)
-    table.insert(clients, {ip = ip, port = port})
-    return true
-end
-
 function network.initHost(port)
-    table.insert(sockets, socket.udp())
-    sockets[1]:settimeout(0)
-    sockets[1]:setoption('reuseaddr', true)
-    sockets[1]:setsockname('0.0.0.0', port)
+    asocket = socket.tcp()
+    asocket:settimeout(0)
+    asocket:setoption('reuseaddr', true)
+    asocket:setoption('keepalive', true)
+    asocket:bind('0.0.0.0', port)
+    asocket:listen(5)
     print("[NETWORK] Socket on port " .. port)
     network.isHost = true
     return true
 end
 
-function network.initClient(host, port, port1)
-    table.insert(sockets, socket.udp())
-    sockets[1]:settimeout(0)
-    sockets[1]:setoption('reuseaddr', true)
-    sockets[1]:setsockname('0.0.0.0', port1)
-    network.addClient(host, port)
-    print("[NETWORK] Socket on port " .. port1)
+function network.initClient()
+    asocket = socket.tcp()
+    asocket:settimeout(0)
+    asocket:setoption('reuseaddr', true)
+    asocket:setoption('keepalive', true)
+    print("[NETWORK] Socket on port ")
     network.isHost = false
     return true
+end
+
+function network.connect(ip, port)
+    print("[NETWORK] Attempting to connect to " .. ip .. ":" .. port)
+    if asocket then
+        print("[NETWORK] Attempting to connect to " .. ip .. ":" .. port)
+        if network.isHost then
+            print("[NETWORK] ERROR: Is host")
+            return false
+        else
+            print("[NETWORK] Attempting to connect to " .. ip .. ":" .. port)
+            asocket:settimeout(1)
+            local ok, err = asocket:connect(ip, port) 
+            print("[NETWORK] Attempting to connect to " .. ip .. ":" .. port)
+            if ok then
+                print("[NETWORK] Connected to " .. ip .. ":" .. port .. "\n")
+                asocket:settimeout(0)
+                return true
+            else
+                print("[NETWORK] ERROR: Failed to connect to " .. ip .. ":" .. port .. ":" .. err .. "\n")
+                return false
+            end
+        end
+    else
+        print("[NETWORK] ERROR: No socket")
+        return false
+    end
 end
 
 function network.add(data)
@@ -50,15 +81,18 @@ function network.add(data)
 end
 
 function network.send()
-    if sockets[1] and (#network.queue > 0) and (#clients > 0) then
-        --print("[NETWORK] Sending data...")
-        local data = json.encode(network.queue)
-        --print(data)
-        for i=1, #clients do
-            sockets[1]:sendto(data, clients[i].ip, clients[i].port)
-            --print("[NETWORK] Data sent")
+    if asocket and (#network.queue > 0) then
+        if network.isHost then
+            for index, value in pairs(clients) do
+                local data = json.encode(network.queue)
+                value:send(data .. "\n")
+            end
+            network.queue = {}
+        else
+            local data = json.encode(network.queue)
+            asocket:send(data .. "\n")
+            network.queue = {}
         end
-        network.queue = {}
     elseif (#network.queue > 1000) then
         print("[NETWORK] WARNING: Queue overflow! Resetting queue...\n")
         network.queue = {}
@@ -66,24 +100,49 @@ function network.send()
 end
 
 function network.receive()
-    if sockets[1] then
-        local data, ip, port = sockets[1]:receivefrom()
-        if not data then return nil end
-        --print("[NETWORK] Received data")
-        data = json.decode(data)
-        if ip and port and network.isHost then
-            network.addClient(ip, port)
+    if asocket then
+        local temp = {}
+        if network.isHost then
+            local ready = socket.select({asocket}, nil, 0)
+            if ready and #ready > 0 then
+                local ok, err = asocket:accept()
+                if ok then
+                    print("[NETWORK] Accepted connection")
+                    ok:settimeout(0)
+                    table.insert(clients, ok)
+                else
+                    print("[NETWORK] ERROR: Failed to accept connection: " .. err)
+                end
+            end
+            for index, value in pairs(clients) do
+                local data = value:receive('*l')
+                if data then
+                    --print("[NETWORK] Received data")
+                    data = json.decode(data)
+                    --print(#data .. "\n")
+                    table.insert(temp, data)
+                end
+            end
+        else
+            local data = asocket:receive('*l')
+            if data then
+                --print("[NETWORK] Received data")
+                data = json.decode(data)
+                --print(#data .. "\n")
+                table.insert(temp, data)
+            end
         end
-        return data, ip, port
+        return concatMultiple(table.unpack(temp))
     end
     return nil
 end
 
 function network.close()
-    if sockets[1] then
-        sockets[1]:close()
-        sockets[1] = nil
+    if asocket then
+        asocket:close()
+        asocket = nil
     end
+
 end
 
 return network

@@ -138,14 +138,9 @@ function spawner.move(actor, location, rotation, scale)
     
     local sc = scale or {X = 1, Y = 1, Z = 1}
     
-    local ok, err = pcall(function()
-        modActor:SetActorTransform(actor, location, rot, sc, nil, nil)
+    ExecuteInGameThread(function()
+        modActor:SetActorTransform(actor, location, rot, sc, true, true)
     end)
-    
-    if not ok then
-        print("[MOVE] Error: " .. tostring(err))
-        return false
-    end
     
     return true
 end

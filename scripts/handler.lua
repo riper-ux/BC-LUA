@@ -15,6 +15,7 @@ end
 function handler.handle()
     local queue, ip, port = module.network.receive()
     if not queue then return end
+    --print("[HANDLER] Received data with " .. #queue .. "\n")
     for i = 1, #queue do
         --print("[HANDLER] Processing: " .. i .. "/" .. #queue .. "\n")
         queue[i].ip = ip

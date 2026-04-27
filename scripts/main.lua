@@ -93,7 +93,9 @@ local function StartClient()
     print("[CLIENT] Starting...\n")
     if isSyncActive then StopSync() end
     
-    if module.network.initClient(config.targetHost, config.targetPort, config.localPort1) then
+    if module.network.initClient() then
+        print ("start ccc")
+        module.network.connect(config.targetHost, config.targetPort)
         isClient = true
         isHost = false
         isSyncActive = true
@@ -119,6 +121,11 @@ RegisterKeyBind(71, function()
     end
     print("\n[KEY] G - CLIENT\n")
     StartClient()
+end)
+
+RegisterKeyBind(75, function()
+    local test = require("tests")
+    test.test()
 end)
 
 print("========================================\n")
