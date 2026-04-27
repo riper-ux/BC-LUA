@@ -58,10 +58,11 @@ Current state:
 ## ⚠️ Known Issues
 
 - Game crashes are common  
-- Render freezes ([Issue](https://github.com/riper-ux/BC-LUA/issues/2))
+- Game freezes
 - Prop desync is normal  
 - Some events may fire incorrectly or not at all  
-- No multiplayer UI or session management yet  
+- No multiplayer UI or session management yet
+- !!!MAX 2 PLAYERS!!! (For now)
 
 ---
 
