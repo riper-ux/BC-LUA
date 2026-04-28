@@ -27,6 +27,7 @@ function event.init()
             if getignore(FullName, Event) then return nil end
             print("[EVENT] CATCHED: " .. FullName .. ":" .. Event .. " with args " .. (#{...}) .. "\n")
             for i = 1, select('#', ...) do
+                print("[EVENT] Arg " .. i .. ": " .. type(({...})[i]:get()) .. "\n")
                 table.insert(params, i, ({...})[i]:get())
             end
             network.add({"event", FullName, Event, params})

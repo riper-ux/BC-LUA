@@ -157,21 +157,22 @@ function prop.sync()
 end
 
 function prop.handle(data)
-    print("[PROP] Handle: " .. data[2] .. "\n")
+    --print("[PROP] Handle: " .. data[2] .. "\n")
     if type(data[3]) ~= "string" then
         local id = data[2]
         local pos = data[3]
         local rot = data[4]
         local scale = data[5]
         if props[id] then
-            print("g\n")
+            --print("g\n")
             if props[id][1]:IsValid() then
-                print("h\n")
+                --print("h\n")
                 if not network.isHost and not force[id] then props[id][1]:SetPropProps(nil, true, nil, nil) end
                 if not force[id] then
-                    print("[PROP] Handle moving: " .. id .. "\n")
-                    local success = spawner.move(props[id][1], pos, rot, scale)
-                    if success == true then
+                    --print("[PROP] Handle moving: " .. id .. "\n")
+                    local success
+                    if network.isHost then success = spawner.move(props[id][1], pos, rot, scale, true, true) else success = spawner.move(props[id][1], pos, rot, scale, false, true) end
+                    if success then
                         props[id][2] = pos
                         props[id][3] = rot
                         props[id][4] = scale

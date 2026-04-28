@@ -1,19 +1,13 @@
 local tests = {}
 
-function tests.test()
-local actor = FindFirstOf("prop_C")
-local class = actor:GetClass()
-
--- Перебираем все функции класса
-class:ForEachFunction(function(func)
-    if func:GetName() == "K2_SetActorLocationAndRotation" then
-        print("Нашли функцию")
-        -- Перебираем параметры
-        func:ForEachProperty(function(prop)
-            print(prop:GetName())
-        end)
+function tests.init()
+    local obj = StaticFindObject("/Game/objects/passwordLock.passwordLock_C")
+    if obj then
+        -- Вывести все функции
+        for k,v in pairs(obj) do
+            print(k, type(v))
+        end
     end
-end)
 end
 
 

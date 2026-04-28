@@ -119,7 +119,7 @@ function spawner.spawn(location, rotation, scale)
 end
 
 -- Перемещение куба
-function spawner.move(actor, location, rotation, scale)
+function spawner.move(actor, location, rotation, scale, sweep, teleport)
     if not actor then
         print("[MOVE] actor is nil")
         return false
@@ -138,18 +138,8 @@ function spawner.move(actor, location, rotation, scale)
     local rot = rotation or {Pitch = 0, Yaw = 0, Roll = 0}
     
     local sc = scale or {X = 1, Y = 1, Z = 1}
-    print("[MOVE] scale X=" .. sc.X .. " Y=" .. sc.Y .. " Z=" .. sc.Z)
 
-    if ready then
-        ready = false
-        ExecuteInGameThread(function()
-            modActor:SetActorTransform(actor, location, rot, sc, true, true)
-            ready = true
-        end)
-    else
-        print("[MOVE] WARNING: move throttled\n")
-    end
-
+    modActor:SetActorTransform(actor, location, rot, sc, sw, tp)
     return true
 end
 

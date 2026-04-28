@@ -83,11 +83,13 @@ function player.send()
     --print("[PLAYER] Sending player data...")
     local pos = player.getPos()
     local rot = player.getRot()
-    if not pos or not rot or (pos == sendedpos and rot == sendedrot) then return end
-    local data = serializer.serialize(pos, rot)
-    network.add({"player", data})
-    sendedpos = pos
-    sendedrot = rot
+    if not pos or not rot then return end
+    if not sendedpos or not sendedrot or not (pos.X == sendedpos.X and pos.Y == sendedpos.Y and pos.Z == sendedpos.Z and rot.Pitch == sendedrot.Pitch and rot.Yaw == sendedrot.Yaw and rot.Roll == sendedrot.Roll) then
+        local data = serializer.serialize(pos, rot)
+        network.add({"player", data})
+        sendedpos = pos
+        sendedrot = rot
+    end
 end
 
 return player
