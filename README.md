@@ -66,6 +66,41 @@ Current state:
 
 ---
 
+## To Do
+### Props
+- [x] Position
+- [x] Rotation
+- [ ] Interact
+- [ ] State
+### Events
+- [ ] Story
+- [ ] Ambient
+- [ ] Random
+### World
+- [ ] Weather
+- [ ] Time
+- [x] Doors (no keycard)
+### Computer
+- [ ] Email
+- [ ] Market
+- [ ] Delivery
+- [ ] Daily Tasks
+### Gameplay
+- [ ] Scanning Signals
+- [ ] Downloading Signals 
+- [ ] Playing Signals 
+- [ ] Processing Signals
+### Player
+- [x] Position
+- [x] Rotation 
+- [ ] Inventory
+### Systems
+- [ ] Saving
+- [ ] Custom Content
+- [ ] Balance
+
+--
+
 ## 🧪 Development Status
 
 **Pre-alpha / prototype stage**  
